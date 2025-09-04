@@ -53,7 +53,9 @@ const AVAILABLE_MODELS: ModelDefinition[] = [
 const App: React.FC = () => {
   const [knowledgeGroups, setKnowledgeGroups] = useState<KnowledgeGroup[]>(INITIAL_KNOWLEDGE_GROUPS);
   const [activeGroupId, setActiveGroupId] = useState<string>(INITIAL_KNOWLEDGE_GROUPS[0].id);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // For mobile overlay
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // For desktop collapse
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini-api-key') || '');
   
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[1].id); // Default to Flash
 
@@ -68,11 +70,18 @@ const App: React.FC = () => {
   const currentUrls = activeGroup ? activeGroup.urls : [];
   const currentFiles = activeGroup ? activeGroup.files : [];
 
+  useEffect(() => {
+    if (apiKey) {
+      localStorage.setItem('gemini-api-key', apiKey);
+    } else {
+      localStorage.removeItem('gemini-api-key');
+    }
+  }, [apiKey]);
+
    useEffect(() => {
-    const apiKey = process.env.API_KEY;
     const currentActiveGroup = knowledgeGroups.find(group => group.id === activeGroupId);
-    const welcomeMessageText = !apiKey 
-        ? 'ERROR: Gemini API Key (process.env.API_KEY) is not configured. Please set this environment variable to use the application.'
+    const welcomeMessageText = !apiKey
+        ? 'Welcome! Please enter your Gemini API key in the Knowledge Base panel to begin.'
         : `Welcome to Documentation Browser! You're currently browsing content from: "${currentActiveGroup?.name || 'None'}". Just ask me questions, or try one of the suggestions below to get started`;
     
     setChatMessages([{
@@ -81,11 +90,11 @@ const App: React.FC = () => {
       sender: MessageSender.SYSTEM,
       timestamp: new Date(),
     }]);
-  }, [activeGroupId, knowledgeGroups]); 
+  }, [activeGroupId, knowledgeGroups, apiKey]); 
 
 
   const fetchAndSetInitialSuggestions = useCallback(async (urls: string[], files: ManagedFile[], model: string) => {
-    if (urls.length === 0 && files.length === 0) {
+    if ((urls.length === 0 && files.length === 0) || !apiKey) {
       setInitialQuerySuggestions([]);
       return;
     }
@@ -94,7 +103,7 @@ const App: React.FC = () => {
     setInitialQuerySuggestions([]); 
 
     try {
-      const response = await getInitialSuggestions(urls, files, model); 
+      const response = await getInitialSuggestions(apiKey, urls, files, model); 
       let suggestionsArray: string[] = [];
       if (response.text) {
         try {
@@ -123,16 +132,16 @@ const App: React.FC = () => {
     } finally {
       setIsFetchingSuggestions(false);
     }
-  }, []); 
+  }, [apiKey]); 
 
   useEffect(() => {
-    if ((currentUrls.length > 0 || currentFiles.length > 0) && process.env.API_KEY) { 
+    if ((currentUrls.length > 0 || currentFiles.length > 0) && apiKey) { 
         fetchAndSetInitialSuggestions(currentUrls, currentFiles, selectedModel);
     } else {
         setInitialQuerySuggestions([]); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUrls, currentFiles, selectedModel, fetchAndSetInitialSuggestions]); 
+  }, [currentUrls, currentFiles, selectedModel, fetchAndSetInitialSuggestions, apiKey]); 
 
 
   const handleAddUrl = (url: string) => {
@@ -187,12 +196,11 @@ const App: React.FC = () => {
 
   const handleSendMessage = async (query: string, images: AttachedImage[]) => {
     if ((!query.trim() && images.length === 0) || isLoading || isFetchingSuggestions) return;
-
-    const apiKey = process.env.API_KEY;
+    
     if (!apiKey) {
        setChatMessages(prev => [...prev, {
         id: `error-apikey-${Date.now()}`,
-        text: 'ERROR: API Key (process.env.API_KEY) is not configured. Please set it up to send messages.',
+        text: 'ERROR: API Key is not set. Please add it in the Knowledge Base panel to send messages.',
         sender: MessageSender.SYSTEM,
         timestamp: new Date(),
       }]);
@@ -221,7 +229,7 @@ const App: React.FC = () => {
     setChatMessages(prevMessages => [...prevMessages, userMessage, modelPlaceholderMessage]);
 
     try {
-      const response = await generateContentWithUrlContext(query, currentUrls, currentFiles, selectedModel, images);
+      const response = await generateContentWithUrlContext(apiKey, query, currentUrls, currentFiles, selectedModel, images);
       setChatMessages(prevMessages =>
         prevMessages.map(msg =>
           msg.id === modelPlaceholderMessage.id
@@ -247,13 +255,15 @@ const App: React.FC = () => {
     handleSendMessage(query, []);
   };
   
-  const chatPlaceholder = (currentUrls.length + currentFiles.length) > 0 
-    ? `Ask about "${activeGroup?.name || 'current documents'}"...`
-    : "Select a group and add sources to the knowledge base to enable chat.";
+  const chatPlaceholder = !apiKey
+    ? "Please enter your API Key to enable chat."
+    : (currentUrls.length + currentFiles.length) > 0 
+      ? `Ask about "${activeGroup?.name || 'current documents'}"...`
+      : "Select a group and add sources to the knowledge base to enable chat.";
 
   return (
     <div 
-      className="h-screen max-h-screen antialiased relative overflow-x-hidden bg-[#121212] text-[#E2E2E2]"
+      className="h-screen max-h-screen antialiased relative overflow-hidden bg-[#121212] text-[#E2E2E2]"
     >
       {/* Overlay for mobile */}
       {isSidebarOpen && (
@@ -268,35 +278,43 @@ const App: React.FC = () => {
         {/* Sidebar */}
         <div className={`
           fixed top-0 left-0 h-full w-11/12 max-w-sm z-30 transform transition-transform ease-in-out duration-300 p-3
-          md:static md:p-0 md:w-1/3 lg:w-1/4 md:h-full md:max-w-none md:translate-x-0 md:z-auto
+          md:static md:p-0 md:h-full md:max-w-none md:z-auto md:translate-x-0
+          md:transition-all md:duration-300 md:ease-in-out md:flex-shrink-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isSidebarCollapsed ? 'md:w-0' : 'md:w-1/3 lg:w-1/4'}
         `}>
-          <KnowledgeBaseManager
-            urls={currentUrls}
-            files={currentFiles}
-            onAddUrl={handleAddUrl}
-            onRemoveUrl={handleRemoveUrl}
-            onAddFiles={handleAddFiles}
-            onRemoveFile={handleRemoveFile}
-            maxSources={MAX_SOURCES}
-            knowledgeGroups={knowledgeGroups}
-            activeGroupId={activeGroupId}
-            onSetGroupId={setActiveGroupId}
-            onCloseSidebar={() => setIsSidebarOpen(false)}
-          />
+          <div className="h-full w-full overflow-hidden">
+            <KnowledgeBaseManager
+              urls={currentUrls}
+              files={currentFiles}
+              onAddUrl={handleAddUrl}
+              onRemoveUrl={handleRemoveUrl}
+              onAddFiles={handleAddFiles}
+              onRemoveFile={handleRemoveFile}
+              maxSources={MAX_SOURCES}
+              knowledgeGroups={knowledgeGroups}
+              activeGroupId={activeGroupId}
+              onSetGroupId={setActiveGroupId}
+              onCloseSidebar={() => setIsSidebarOpen(false)}
+              apiKey={apiKey}
+              onSetApiKey={setApiKey}
+            />
+          </div>
         </div>
 
         {/* Chat Interface */}
-        <div className="w-full h-full p-3 md:p-0 md:w-2/3 lg:w-3/4">
+        <div className="w-full h-full p-3 md:p-0 flex-1">
           <ChatInterface
             messages={chatMessages}
             onSendMessage={handleSendMessage}
-            isLoading={isLoading}
+            isLoading={!apiKey || isLoading}
             placeholderText={chatPlaceholder}
             initialQuerySuggestions={initialQuerySuggestions}
             onSuggestedQueryClick={handleSuggestedQueryClick}
             isFetchingSuggestions={isFetchingSuggestions}
             onToggleSidebar={() => setIsSidebarOpen(true)}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
             availableModels={AVAILABLE_MODELS}
             selectedModel={selectedModel}
             onSetModel={setSelectedModel}

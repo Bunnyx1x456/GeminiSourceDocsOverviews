@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, X, FileUp } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, Trash2, ChevronDown, X, FileUp, KeyRound, Save } from 'lucide-react';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -22,6 +22,8 @@ interface KnowledgeBaseManagerProps {
   activeGroupId: string;
   onSetGroupId: (id: string) => void;
   onCloseSidebar?: () => void;
+  apiKey: string;
+  onSetApiKey: (key: string) => void;
 }
 
 // Set worker source for pdf.js to ensure it can run in the background
@@ -39,10 +41,22 @@ const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
   activeGroupId,
   onSetGroupId,
   onCloseSidebar,
+  apiKey,
+  onSetApiKey,
 }) => {
   const [currentUrlInput, setCurrentUrlInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [apiKeyInput, setApiKeyInput] = useState(apiKey);
+
+  useEffect(() => {
+    setApiKeyInput(apiKey);
+  }, [apiKey]);
+
+  const handleSaveApiKey = () => {
+    onSetApiKey(apiKeyInput.trim());
+    // Optionally, you could add a success message here
+  };
 
   const totalSources = urls.length + files.length;
 
@@ -278,7 +292,7 @@ const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
       {error && <p className="text-xs text-[#f87171] mb-2">{error}</p>}
       {totalSources >= maxSources && <p className="text-xs text-[#fbbf24] mb-2">Maximum {maxSources} sources reached for this group.</p>}
       
-      <div className="flex-grow overflow-y-auto space-y-2 chat-container">
+      <div className="flex-grow overflow-y-auto space-y-2 chat-container pr-1">
         {totalSources === 0 && (
           <p className="text-[#777777] text-center py-3 text-sm">Add documentation URLs or import files to the group "{activeGroupName}" to start querying.</p>
         )}
@@ -314,6 +328,36 @@ const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
             </button>
           </div>
         ))}
+      </div>
+      
+      <div className="mt-auto pt-3 border-t border-[rgba(255,255,255,0.05)]">
+        <label htmlFor="api-key-input" className="block text-sm font-medium text-[#A8ABB4] mb-1">
+          Gemini API Key
+        </label>
+        <div className="flex items-center gap-2">
+          <KeyRound size={16} className="text-[#A8ABB4] flex-shrink-0" />
+          <input
+            id="api-key-input"
+            type="password"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            placeholder="Enter your API Key"
+            className="flex-grow h-8 py-1 px-2.5 border border-[rgba(255,255,255,0.1)] bg-[#2C2C2C] text-[#E2E2E2] placeholder-[#777777] rounded-lg focus:ring-1 focus:ring-white/20 focus:border-white/20 transition-shadow text-sm"
+            onKeyPress={(e) => e.key === 'Enter' && handleSaveApiKey()}
+          />
+          <button
+            onClick={handleSaveApiKey}
+            className="h-8 w-8 p-1.5 bg-white/[.12] hover:bg-white/20 text-white rounded-lg transition-colors flex items-center justify-center"
+            aria-label="Save API Key"
+          >
+            <Save size={16} />
+          </button>
+        </div>
+        {!apiKey && (
+          <p className="text-xs text-[#fbbf24] mt-1.5 px-1">
+            Your API key is stored only in your browser's local storage.
+          </p>
+        )}
       </div>
     </div>
   );

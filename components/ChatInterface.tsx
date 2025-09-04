@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, MessageSender, ModelDefinition, AttachedImage } from '../types'; 
 import MessageItem from './MessageItem';
-import { Send, Menu, ChevronDown, ChevronsUpDown, Paperclip, XCircle } from 'lucide-react';
+import { Send, Menu, ChevronDown, ChevronsUpDown, Paperclip, XCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -17,6 +17,8 @@ interface ChatInterfaceProps {
   onSuggestedQueryClick?: (query: string) => void;
   isFetchingSuggestions?: boolean;
   onToggleSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleCollapse?: () => void;
   availableModels: ModelDefinition[];
   selectedModel: string;
   onSetModel: (modelId: string) => void;
@@ -31,6 +33,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSuggestedQueryClick,
   isFetchingSuggestions,
   onToggleSidebar,
+  isSidebarCollapsed,
+  onToggleCollapse,
   availableModels,
   selectedModel,
   onSetModel,
@@ -159,6 +163,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <div ref={chatInterfaceRef} className="flex flex-col h-full bg-[#1E1E1E] rounded-xl shadow-md border border-[rgba(255,255,255,0.05)]">
       <div className="p-4 border-b border-[rgba(255,255,255,0.05)] flex justify-between items-center">
         <div className="flex items-center gap-3">
+          {/* Desktop Sidebar Toggle */}
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="hidden md:block p-1.5 text-[#A8ABB4] hover:text-white rounded-md hover:bg-white/10 transition-colors"
+              aria-label={isSidebarCollapsed ? "Open knowledge base" : "Close knowledge base"}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+            </button>
+          )}
+           {/* Mobile Sidebar Toggle */}
            {onToggleSidebar && (
             <button 
               onClick={onToggleSidebar}

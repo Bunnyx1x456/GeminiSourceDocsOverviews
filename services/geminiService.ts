@@ -7,20 +7,11 @@
 import { GoogleGenAI, GenerateContentResponse, Tool, HarmCategory, HarmBlockThreshold, Content, Part } from "@google/genai";
 import { UrlContextMetadataItem, ManagedFile, AttachedImage } from '../types';
 
-// IMPORTANT: The API key MUST be set as an environment variable `process.env.API_KEY`
-const API_KEY = process.env.API_KEY;
-
-let ai: GoogleGenAI;
-
-const getAiInstance = (): GoogleGenAI => {
-  if (!API_KEY) {
-    console.error("API_KEY is not set in environment variables. Please set process.env.API_KEY.");
-    throw new Error("Gemini API Key not configured. Set process.env.API_KEY.");
+const getAiInstance = (apiKey: string): GoogleGenAI => {
+  if (!apiKey) {
+    throw new Error("Gemini API Key not provided.");
   }
-  if (!ai) {
-    ai = new GoogleGenAI({ apiKey: API_KEY });
-  }
-  return ai;
+  return new GoogleGenAI({ apiKey });
 };
 
 const safetySettings = [
@@ -36,13 +27,14 @@ interface GeminiResponse {
 }
 
 export const generateContentWithUrlContext = async (
+  apiKey: string,
   prompt: string,
   urls: string[],
   files: ManagedFile[],
   modelName: string,
   images: AttachedImage[],
 ): Promise<GeminiResponse> => {
-  const currentAi = getAiInstance();
+  const currentAi = getAiInstance(apiKey);
   
   let fullPrompt = prompt;
 
@@ -103,7 +95,7 @@ export const generateContentWithUrlContext = async (
     if (error instanceof Error) {
       const googleError = error as any; 
       if (googleError.message && googleError.message.includes("API key not valid")) {
-         throw new Error("Invalid API Key. Please check your GEMINI_API_KEY environment variable.");
+         throw new Error("Invalid API Key. Please check the key you provided.");
       }
       if (googleError.message && googleError.message.includes("quota")) {
         throw new Error("API quota exceeded. Please check your Gemini API quota.");
@@ -118,6 +110,7 @@ export const generateContentWithUrlContext = async (
 };
 
 export const getInitialSuggestions = async (
+  apiKey: string,
   urls: string[], 
   files: ManagedFile[],
   modelName: string
@@ -125,7 +118,7 @@ export const getInitialSuggestions = async (
   if (urls.length === 0 && files.length === 0) {
     return { text: JSON.stringify({ suggestions: ["Add URLs or import files to get suggestions."] }) };
   }
-  const currentAi = getAiInstance();
+  const currentAi = getAiInstance(apiKey);
 
   const urlList = urls.length > 0 ? `\nRelevant URLs:\n${urls.join('\n')}` : '';
   const filePreamble = files.length > 0 ? `\nFile Contents:\n${files.map(f => `File: ${f.name}\nContent: ${f.content.substring(0, 500)}...`).join('\n')}` : '';
@@ -155,7 +148,7 @@ ${filePreamble}`;
      if (error instanceof Error) {
       const googleError = error as any; 
       if (googleError.message && googleError.message.includes("API key not valid")) {
-         throw new Error("Invalid API Key for suggestions. Please check your GEMINI_API_KEY environment variable.");
+         throw new Error("Invalid API Key for suggestions. Please check the key you provided.");
       }
       if (googleError.message && googleError.message.includes("Tool use with a response mime type: 'application/json' is unsupported")) {
         throw new Error("Configuration error: Cannot use tools with JSON response type for suggestions. This should be fixed in the code.");
